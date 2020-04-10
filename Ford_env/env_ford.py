@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument('--config-dir', type=str, required=False,
                         default=default_config_dir, help="experiment config dir")
     parser.add_argument('--is_training', type=str, required=False,
-                        default=True, help="True=train, False=evaluation")
+                        default=not True, help="True=train, False=evaluation")
     parser.add_argument('--test-mode', type=str, required=False,
                         default='no_test',
                         help="test mode during training",
@@ -55,13 +55,22 @@ class FordEnv(gym.Env):
         self.rendering = rendering
         self.sample_time = config.getfloat('sample_time')
         self.episode_length = int(config.getfloat('episode_length'))
-        self.seed(66)
+        self.seed(33)
+        # self.fuel_ls = []
+        # self.soc_ls = []
+        # for compute speed tracking error
+        # self.v_mph_ls = []
+        # self.target_speed_ls = []
+        # self.eng_org_ls = []
+        # self.eng_new_ls = []
+        # self.tHist = []
+        # self.SOC = []
 
         low = np.array([0, -1e4, -1e4, -1e4, 0, 0, -1e4])
         high = np.array([100, 1e4, 1e4, 1e4, 1, 1, 1e4])
 
         if discrete is True:
-            self.action_space = gym.spaces.Discrete(5)
+            self.action_space = gym.spaces.Discrete(9)
             self.observation_space = gym.spaces.Box(
                 low, high, dtype=np.float32)
         else:
@@ -82,13 +91,29 @@ class FordEnv(gym.Env):
         return [seed]
 
     def reset(self, ):
-        dir = 'Data/results/'
-        np.save(dir + '{}'.format('fuel_ls'), self.fuel_ls)
-        np.save(dir + '{}'.format('soc_ls'), self.soc_ls)
+        # save reward to compute reward_norm
+        # dir = 'Data-1/results/'
+        # np.save(dir + '{}'.format('fuel_ls'), self.fuel_ls)
+        # np.save(dir + '{}'.format('soc_ls'), self.soc_ls)
+
+        # for compute speed tracking error
+        # np.save(dir + '{}'.format('v_mph_ls'), self.v_mph_ls)
+        # np.save(dir + '{}'.format('target_speed_ls'), self.target_speed_ls)
+
+        # for see the eng torque changes
+        # np.save(dir + '{}'.format('eng_org_ls'), self.eng_org_ls)
+        # np.save(dir + '{}'.format('eng_new_ls'), self.eng_new_ls)
+
         self.steps = 0
-        self.fuel_ls = []
-        self.soc_ls = []
-        # reset the matlab model
+        # self.fuel_ls = []
+        # self.soc_ls = []
+        # for compute speed tracking error
+        # self.v_mph_ls = []
+        # self.target_speed_ls = []
+        # for see the eng torque changes
+        # self.eng_org_ls = []
+        # self.eng_new_ls = []
+        # reset the MATLAB model
         self.obs = self.Matlab_Eng.reset_env(self.rendering)
         return self.obs
 
@@ -110,8 +135,21 @@ class FordEnv(gym.Env):
             obs_new = (obs_new - obs_mean) / obs_std
         if self.steps >= int(self.episode_length / self.sample_time) - 10:
             done = True
-            self.fuel_ls.append(self.Matlab_Eng.x1Hist)
-            self.soc_ls.append(self.Matlab_Eng.x2Hist)
+            # self.fuel_ls.append(self.Matlab_Eng.x1Hist)
+            # self.soc_ls.append(self.Matlab_Eng.x2Hist)
+            # for compute speed tracking error
+            # self.v_mph_ls.append(self.Matlab_Eng.x1Hist)
+            # self.target_speed_ls.append(self.Matlab_Eng.x2Hist)
+            # for see the eng torque changes
+            # self.eng_org_ls.append(self.Matlab_Eng.x1Hist)
+            # self.eng_new_ls.append(self.Matlab_Eng.x2Hist)
+            # self.tHist.append(self.Matlab_Eng.tHist)
+            # self.SOC .append(self.Matlab_Eng.SOC_C_ls)
+            # np.save('Data-1/results/' + '{}'.format('eng_org_ls'), self.eng_org_ls)
+            # np.save('Data-1/results/' + '{}'.format('eng_new_ls'), self.eng_new_ls)
+            # np.save('Data-1/results/' + '{}'.format('tHist'), self.tHist)
+            # np.save('Data-1/results/' + '{}'.format('SOC'), self.SOC)
+
         self.steps += 1
 
         return obs_new, self.last_reward, done, _
@@ -121,7 +159,7 @@ if __name__ == "__main__":
     args = parse_args()
     config_dir = args.config_dir
     config = configparser.ConfigParser()
-    config.read('config/config_ford.ini')
+    config.read(r'C:\Users\Windows\PycharmProjects\Ford_proj_v2\config\config_ford.ini')
     epoch = 0
     # Example of using FordEnv with sample controller
     env = FordEnv(config['ENV_CONFIG'])
@@ -130,20 +168,23 @@ if __name__ == "__main__":
     print("Simulation starting...")
     while True:
         env.reset()
+        reward_ls = []
         rewards = 0
         last_reward = 0
         while True:
             # print('--------------')
             # print("steps = ", Ford_env.steps)
             # print("rewards = ", last_reward)
-            # action = np.random.randint(action_size, size=1)
+            action = np.random.randint(action_size, size=1)
             # Take an action
-            obs, last_reward, done, _ = env.step(9)  # action[0], 4
+            obs, last_reward, done, _ = env.step(action[0])  # action[0], 2
+            reward_ls.append(last_reward)
             rewards += last_reward
             if done:
                 break
         print('--------------')
         print("steps = ", env.steps)
         print("rewards = ", rewards)
+        np.save('{}'.format('reward_ls'), reward_ls)
         epoch += 1
     env.close()

@@ -31,7 +31,7 @@ def parse_args():
     # parser.add_argument('--config-dir', type=str, required=False,
     #                     default=default_config_dir, help="experiment config dir")
     parser.add_argument('--is_training', type=str, required=False,
-                        default=not False, help="True=train, False=evaluation")
+                        default=True, help="True=train, False=evaluation")
     parser.add_argument('--test-mode', type=str, required=False,
                         default='in_train_test',
                         help="test mode during training",
@@ -61,6 +61,8 @@ def train_fn(args):
     buffer_size = int(config.getfloat('MODEL_CONFIG', 'buffer_size'))
     batch_size = int(config.getfloat('MODEL_CONFIG', 'batch_size'))
     lr_init = config.getfloat('MODEL_CONFIG', 'lr_init')
+    reward_norm = config.getfloat('MODEL_CONFIG', 'reward_norm')
+    reward_clip = config.getfloat('MODEL_CONFIG', 'reward_clip')
 
     # training config
     total_step = int(config.getfloat('TRAIN_CONFIG', 'total_step'))
@@ -76,6 +78,7 @@ def train_fn(args):
     eps_decay = config.get('MODEL_CONFIG', 'epsilon_decay')
     eps_ratio = config.getfloat('MODEL_CONFIG', 'epsilon_ratio')
     eps_min = config.getfloat('MODEL_CONFIG', 'epsilon_min')
+    seed = config.getint('ENV_CONFIG', 'seed')
 
     if eps_decay == 'constant':
         eps_scheduler = Scheduler(eps_init, decay=eps_decay)
@@ -93,6 +96,7 @@ def train_fn(args):
     config = tf.ConfigProto(allow_soft_placement=True)
     # config.gpu_options.allow_growth = True
     sess = tf.get_default_session()
+    tf.set_random_seed(seed)
     if sess is None:
         sess = make_session(config=config, make_default=True)
 
@@ -125,10 +129,14 @@ def train_fn(args):
             new_obs, rew, done, _, = env.step(action)
             if rendering:
                 env.render()
+            if reward_norm:
+                rew = rew / reward_norm
+            if reward_clip:
+                rew = np.clip(rew, -reward_clip, reward_clip)
             replay_buffer.add(obs, action, rew, new_obs, float(done))
             ob_ls.append([new_obs])
             obs = new_obs
-            epoch_rewards[-1] += rew
+            epoch_rewards[-1] += rew  # r_sum = -3499.51
 
             if t > learning_starts and t % train_freq == 0:
                 # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
@@ -161,8 +169,10 @@ def train_fn(args):
                         # Take action and update exploration to the newest value
                         action_eval = policy.forward(sess, obs_eval[None], 1, mode='eval')
                         new_obs_eval, rew_eval, done_eval, _ = env.step(action_eval)
-
                         obs_eval = new_obs_eval
+
+                        if reward_norm:
+                            rew_eval = rew_eval / reward_norm
                         episode_reward_eval += rew_eval
 
                     print("evaluating reward = ", episode_reward_eval)
@@ -194,21 +204,34 @@ def train_fn(args):
 def evaluate(args):
     base_dir = args.base_dir
     dirs = init_dir(base_dir)
+    environment = args.environment
+    if environment is 'ford':
+        config_dir = 'config/config_ford.ini'
+    else:
+        config_dir = 'config/config_gym.ini'
+    copy_file(config_dir, dirs['data'])
+    config = configparser.ConfigParser()
+    config.read(config_dir)
+    rendering = False
     # Initialize environment
     print("Initializing environment")
-    # env = FordEnv(config['ENV_CONFIG'], rendering=rendering)
-    env = gym.make("CartPole-v0")
+    if environment is 'ford':
+        env = FordEnv(config['ENV_CONFIG'], rendering=False)
+    else:
+        env = gym.make("CartPole-v0")
+
     try:
         config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         with tf.Session(config=config) as sess:
             policy = Q_Policy(num_actions=env.action_space.n, num_obs=env.observation_space.shape[0])
 
-            policy.load(sess, dirs['model'], checkpoint=None)
+            policy.load(sess, dirs['model'], checkpoint=160)
             print("Model loaded...")
 
             epoch_rewards = 0.0
             steps = 0  # counting the steps in one epoch
+            reward_norm = 7314.15
             obs = env.reset()
 
             while True:
@@ -216,9 +239,13 @@ def evaluate(args):
                 steps += 1
                 action = policy.forward(sess, obs[None], 1, mode='eval')
                 new_obs, rew, done, _, = env.step(action)
-                env.render()
+                if rendering:
+                    env.render()
                 obs = new_obs
-                epoch_rewards += rew
+
+                if reward_norm:
+                    rew_eval = rew / reward_norm
+                epoch_rewards += rew_eval
                 if done:
                     print("evaluating reward = ", epoch_rewards)
                     break

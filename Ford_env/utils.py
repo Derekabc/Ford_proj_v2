@@ -13,6 +13,8 @@ class Matlab_Eng():
     def reset_env(self, rendering=False):
         self.last_reward = 0
         self.r_fuel = 0
+        self.r_SOC = 0
+        self.SOC_O = 0.5380
         self.eng_ori = 0  # the initail engine torque
         self.tHist = []
         self.x1Hist = []
@@ -55,51 +57,51 @@ class Matlab_Eng():
 
     def getObservations(self, ):
         # get system Output and Time History
-        t = self.eng.eval('tHist')
-        v_mph = self.eng.eval('v_mph')
-        engine_spd = self.eng.eval('engine_spd')
-        MG1_spd = self.eng.eval('MG1_spd')
-        MG2_spd = self.eng.eval('MG2_spd')
-        Acc_pad = self.eng.eval('Acc_pad')
-        Dec_pad = self.eng.eval('Dec_pad')
-        WheelTD = self.eng.eval('WheelTD')
-        Fuel_kg = self.eng.eval('Fuel_kg')
-        SOC_C = self.eng.eval('SOC_C')
-        target_speed = self.eng.eval('target_speed')
-        self.eng_ori = self.eng.eval('eng_ori')
-        self.eng_new = self.eng.eval('eng_new')
-        if (type(v_mph) == float):
-            self.Fuel_kg = Fuel_kg
-            self.SOC_C = SOC_C
-            self.target_speed = target_speed
+        self.t_ls = self.eng.eval('tHist')
+        self.v_mph_ls = self.eng.eval('v_mph')
+        self.engine_spd_ls = self.eng.eval('engine_spd')
+        self.MG1_spd_ls = self.eng.eval('MG1_spd')
+        self.MG2_spd_ls = self.eng.eval('MG2_spd')
+        self.Acc_pad_ls = self.eng.eval('Acc_pad')
+        self.Dec_pad_ls = self.eng.eval('Dec_pad')
+        self.WheelTD_ls = self.eng.eval('WheelTD')
+        self.Fuel_kg_ls = self.eng.eval('Fuel_kg')
+        self.SOC_C_ls = self.eng.eval('SOC_C')
+        self.target_speed_ls = self.eng.eval('target_speed')
+        self.eng_ori_ls = self.eng.eval('eng_ori')
+        self.eng_new_ls = self.eng.eval('eng_new')
+        if (type(self.v_mph_ls) == float):
+            self.Fuel_kg = self.Fuel_kg_ls
+            self.SOC_C = self.SOC_C_ls
+            self.target_speed = self.target_speed_ls
             # for plotting use
-            self.tHist.append(t)
-            # self.x1Hist.append(self.eng_ori)
-            # self.x2Hist.append(self.eng_new)
-            # self.x1Hist.append(v_mph  )
+            self.tHist.append(self.t_ls)
+            self.x1Hist.append(self.eng_ori_ls)
+            self.x2Hist.append(self.eng_new_ls)
+            # self.x1Hist.append(v_mph)
             # self.x2Hist.append(target_speed * 0.621371192237334)
-            self.x1Hist.append(int(Fuel_kg) * 1000)
-            self.x2Hist.append(int(SOC_C))
-            self.obs = (v_mph, engine_spd, MG1_spd,
-                   MG2_spd, Acc_pad, Dec_pad, WheelTD)
+            # self.x1Hist.append(int(Fuel_kg) * 1000)
+            # self.x2Hist.append(int(SOC_C))
+            self.obs = (self.v_mph_ls, self.engine_spd_ls, self.MG1_spd_ls,
+                        self.MG2_spd_ls, self.Acc_pad_ls, self.Dec_pad_ls, self.WheelTD_ls)
             return np.array(self.obs)
         else:
-            self.Fuel_kg = Fuel_kg[-1][0]
-            self.SOC_C = SOC_C[-1][0]
-            self.target_speed = target_speed[-1][0]
-            self.tHist.append(t[-1][0])
-            # self.x1Hist.append(self.eng_ori[-1][0])
-            # self.x2Hist.append(self.eng_new[-1][0])
+            self.Fuel_kg = self.Fuel_kg_ls[-1][0]
+            self.SOC_C = self.SOC_C_ls[-1][0]
+            self.target_speed = self.target_speed_ls[-1][0]
+            self.tHist.append(self.t_ls[-1][0])
+            self.x1Hist.append(self.eng_ori_ls[-1][0])
+            self.x2Hist.append(self.eng_new_ls[-1][0])
             # self.x1Hist.append(v_mph[-1][0])
             # self.x2Hist.append(target_speed[-1][0] * 0.621371192237334)
-            self.x1Hist.append(int(Fuel_kg[-1][0]) * 1000)
-            self.x2Hist.append(int(SOC_C[-1][0]))
-            self.obs = [v_mph[-1][0], engine_spd[-1][0], MG1_spd[-1][0],
-                        MG2_spd[-1][0], Acc_pad[-1][0], Dec_pad[-1][0], WheelTD[-1][0]]
+            # self.x1Hist.append(int(Fuel_kg[-1][0]) * 1000)
+            # self.x2Hist.append(int(SOC_C[-1][0]))
+            self.obs = [self.v_mph_ls[-1][0], self.engine_spd_ls[-1][0], self.MG1_spd_ls[-1][0],
+                        self.MG2_spd_ls[-1][0], self.Acc_pad_ls[-1][0], self.Dec_pad_ls[-1][0], self.WheelTD_ls[-1][0]]
             return np.array(self.obs)
 
     def run_step(self, action):
-        u1 = -8 + action * 4
+        u1 = -4 + action * 1
         # Set the Control Action
         self.setControlAction(u1)
         self.eng.set_param(self.modelName, 'SimulationCommand',
@@ -112,8 +114,13 @@ class Matlab_Eng():
     def reward_fn(self, ):
         # reward = fuel_consumption + speed_tracking + SOC
         # here we use g/s instead of kg/s
-        self.r_fuel = self.sample_time * self.Fuel_kg * 1000
-        self.last_reward = - self.r_fuel
+        self.fuel_g = self.sample_time * self.Fuel_kg * 1000
+        self.r_fuel = self.fuel_g * 4.3e4
+
+        # compute the energy consumed by the battery, positive: discharging; negative: charging.
+        self.r_SOC = (self.SOC_O - self.SOC_C) / 0.001 * 3.2e3
+        self.SOC_O = self.SOC_C
+        self.last_reward = - (self.r_fuel + self.r_SOC)
 
     def disconnect(self, ):
         print("eng is closed")
