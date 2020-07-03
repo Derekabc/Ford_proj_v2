@@ -73,6 +73,8 @@ def train_fn(args):
     log_freq = int(config.getfloat('TRAIN_CONFIG', 'log_freq'))
     print_freq = int(config.getfloat('TRAIN_CONFIG', 'print_freq'))
     target_network_update_freq = int(config.getfloat('TRAIN_CONFIG', 'target_network_update_freq'))
+    number_update = int(config.getfloat('TRAIN_CONFIG', 'num_update'))
+    num_history = int(config.getfloat('TRAIN_CONFIG', 'num_history'))
 
     eps_init = config.getfloat('MODEL_CONFIG', 'epsilon_init')
     eps_decay = config.get('MODEL_CONFIG', 'epsilon_decay')
@@ -101,7 +103,7 @@ def train_fn(args):
         sess = make_session(config=config, make_default=True)
 
     try:
-        policy = Q_Policy(num_actions=env.action_space.n, num_obs=env.observation_space.shape[0])
+        policy = Q_Policy(env.action_space.n, env.observation_space.shape[0], num_history)
         # Create all the functions necessary to train the model
         train, update_target, debug = policy.build_graph(
             optimizer=tf.train.AdamOptimizer(learning_rate=lr_init),
@@ -110,6 +112,8 @@ def train_fn(args):
         )
 
         replay_buffer = ReplayBuffer(buffer_size)
+        obs_buffer = np.zeros(shape=(num_history,env.observation_space.shape[0]))
+        obs_buffer_eval = np.zeros(shape=(num_history,env.observation_space.shape[0]))
         # Initialize the parameters and copy them to the target network.
         sess.run(tf.global_variables_initializer())
         # if restore:
@@ -121,32 +125,37 @@ def train_fn(args):
         ob_ls = []
         steps = 0  # counting the steps in one epoch
         obs = env.reset()
-
+        obs_buffer[-1] = obs
         for t in range(total_step):
             # Take action and update exploration to the newest value
             steps += 1
-            action = policy.forward(sess, obs[None], eps_scheduler.get(1), mode='explore')
+            action = policy.forward(sess, obs_buffer[None], eps_scheduler.get(1), mode='explore')
             new_obs, rew, done, _, = env.step(action)
+            obs_buffer_new = obs_buffer
+            np.roll(obs_buffer_new, -1, axis=0)  # shift the numpy array up, to make the most old experience last
+            obs_buffer_new[-1] = new_obs
             if rendering:
                 env.render()
             if reward_norm:
                 rew = rew / reward_norm
             if reward_clip:
                 rew = np.clip(rew, -reward_clip, reward_clip)
-            replay_buffer.add(obs, action, rew, new_obs, float(done))
+            replay_buffer.add(obs_buffer, action, rew, obs_buffer_new, float(done))
             ob_ls.append([new_obs])
-            obs = new_obs
+            obs_buffer = obs_buffer_new
+
             epoch_rewards[-1] += rew  # r_sum = -3499.51
 
             if t > learning_starts and t % train_freq == 0:
-                # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
-                obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
-                weights, batch_idxes = np.ones_like(rewards), None
-                train(obses_t, actions, rewards, obses_tp1, dones, weights)
+                for _ in range(number_update):
+                    # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
+                    obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
+                    weights, batch_idxes = np.ones_like(rewards), None
+                    train(obses_t, actions, rewards, obses_tp1, dones, weights)
 
             # Update target network periodically.
             if t > learning_starts and t % target_network_update_freq == 0:
-                update_target()
+                    update_target()
 
             if done:
                 if print_freq is not None and len(epoch_rewards) % print_freq == 0:
@@ -166,10 +175,12 @@ def train_fn(args):
                     done_eval = False
                     # print("Staring evaluating")
                     while not done_eval:
+                        obs_buffer_eval[-1] = obs_eval
                         # Take action and update exploration to the newest value
-                        action_eval = policy.forward(sess, obs_eval[None], 1, mode='eval')
+                        action_eval = policy.forward(sess, obs_buffer_eval[None], 1, mode='eval')
                         new_obs_eval, rew_eval, done_eval, _ = env.step(action_eval)
                         obs_eval = new_obs_eval
+                        np.roll(obs_buffer_eval, -1, axis=0)  # shift the numpy array up
 
                         if reward_norm:
                             rew_eval = rew_eval / reward_norm
@@ -186,7 +197,10 @@ def train_fn(args):
                     np.save(dirs['results'] + '{}'.format('epoch_rewards'), epoch_rewards)
                     np.save(dirs['results'] + '{}'.format('ob_ls'), ob_ls)
 
+                obs_buffer = np.zeros(shape=(num_history, env.observation_space.shape[0]))
+                obs_buffer_eval = np.zeros(shape=(num_history, env.observation_space.shape[0]))
                 obs = env.reset()
+                obs_buffer[-1] = obs
                 epoch_rewards.append(0.0)
 
         env.close()
@@ -212,6 +226,7 @@ def evaluate(args):
     copy_file(config_dir, dirs['data'])
     config = configparser.ConfigParser()
     config.read(config_dir)
+    num_history = int(config.getfloat('TRAIN_CONFIG', 'num_history'))
     rendering = False
     # Initialize environment
     print("Initializing environment")
@@ -219,12 +234,13 @@ def evaluate(args):
         env = FordEnv(config['ENV_CONFIG'], rendering=False)
     else:
         env = gym.make("CartPole-v0")
+    obs_buffer_eval = np.zeros(shape=(num_history, env.observation_space.shape[0]))
 
     try:
         config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         with tf.Session(config=config) as sess:
-            policy = Q_Policy(num_actions=env.action_space.n, num_obs=env.observation_space.shape[0])
+            policy = Q_Policy(env.action_space.n, env.observation_space.shape[0], num_history)
 
             policy.load(sess, dirs['model'], checkpoint=160)
             print("Model loaded...")
@@ -237,12 +253,13 @@ def evaluate(args):
             while True:
                 # Take action and update exploration to the newest value
                 steps += 1
-                action = policy.forward(sess, obs[None], 1, mode='eval')
+                obs_buffer_eval[-1] = obs
+                action = policy.forward(sess, obs_buffer_eval[None], 1, mode='eval')
                 new_obs, rew, done, _, = env.step(action)
                 if rendering:
                     env.render()
                 obs = new_obs
-
+                np.roll(obs_buffer_eval, -1, axis=0)  # shift the numpy array up
                 if reward_norm:
                     rew_eval = rew / reward_norm
                 epoch_rewards += rew_eval

@@ -1,25 +1,43 @@
 import tensorflow as tf
 import common.tf_util as U
 import numpy as np
-import tensorflow.contrib.layers as layers
+# import tensorflow.contrib.layers as layers
 import os
 import logging
 
 
 def q_func(inpt, num_actions, scope, reuse=False):
-    """This model takes as input an observation and returns values of all actions."""
+    """This model takes as input an observation and returns values of all actions.
+    https://burakhimmetoglu.com/2017/08/22/time-series-classification-with-tensorflow/
+    """
     with tf.variable_scope(scope, reuse=reuse):
-        out = inpt
-        out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
-        # out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
-        out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
+        out = tf.layers.conv1d(inputs=inpt, filters=12, kernel_size=2, strides=1,
+                               padding='same', activation=tf.nn.relu)
+        out = tf.layers.max_pooling1d(inputs=out, pool_size=2, strides=2, padding='same')
+        out = tf.reshape(out, (-1, 10 * 12))
+        out = tf.layers.dense(out, 64, tf.nn.relu)
+        # out = tf.layers.dense(out, num_outputs=64, activation_fn=tf.nn.tanh)
+        out = tf.layers.dropout(inputs=out, rate=0.5)
+        out = tf.layers.dense(out, num_actions)
+        # out = tf.layers.dense(out, num_outputs=num_actions, activation_fn=None)
         return out
 
 
+# def q_func(inpt, num_actions, scope, reuse=False):
+#     """This model takes as input an observation and returns values of all actions."""
+#     with tf.variable_scope(scope, reuse=reuse):
+#         out = inpt
+#         out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
+#         # out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
+#         out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
+#         return out
+
+
 class Q_Policy:
-    def __init__(self, num_actions, num_obs, double_q=True, scope="deepq", reuse=None):
+    def __init__(self, num_actions, num_obs, num_history, double_q=True, scope="deepq", reuse=None):
         self.num_actions = num_actions
         self.num_obs = num_obs
+        self.num_history = num_history
         self.scope = scope
         self.double_q = double_q
         self.reuse = reuse
@@ -28,17 +46,17 @@ class Q_Policy:
 
     def build_act(self, reuse=None):
         with tf.variable_scope(self.scope, reuse=reuse):
-            self.observations_ph = tf.placeholder(tf.float32, [None, self.num_obs])
+            self.observations_ph = tf.placeholder(tf.float32, [None, self.num_history, self.num_obs])
             q_values = q_func(self.observations_ph, self.num_actions, scope="q_func")
             return q_values
 
     def build_graph(self, optimizer, grad_norm_clipping=None, gamma=1.0):
         with tf.variable_scope(self.scope, reuse=None):
             # set up placeholders
-            obs_t_input = tf.placeholder(tf.float32, [None, self.num_obs])
+            obs_t_input = tf.placeholder(tf.float32, [None, self.num_history, self.num_obs])
             act_t_ph = tf.placeholder(tf.int32, [None], name="action")
             rew_t_ph = tf.placeholder(tf.float32, [None], name="reward")
-            obs_tp1_input = tf.placeholder(tf.float32, [None, self.num_obs])
+            obs_tp1_input = tf.placeholder(tf.float32, [None, self.num_history, self.num_obs])
             done_mask_ph = tf.placeholder(tf.float32, [None], name="done")
             importance_weights_ph = tf.placeholder(tf.float32, [None], name="weight")
 

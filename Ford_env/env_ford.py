@@ -70,7 +70,7 @@ class FordEnv(gym.Env):
         high = np.array([100, 1e4, 1e4, 1e4, 1, 1, 1e4])
 
         if discrete is True:
-            self.action_space = gym.spaces.Discrete(9)
+            self.action_space = gym.spaces.Discrete(5)
             self.observation_space = gym.spaces.Box(
                 low, high, dtype=np.float32)
         else:
