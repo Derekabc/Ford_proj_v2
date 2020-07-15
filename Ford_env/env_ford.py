@@ -1,10 +1,10 @@
 import sys
+
 sys.path.append("../")
 
 import gym
 import argparse
 import configparser
-from gym.utils import seeding
 from Ford_env.utils import *
 
 
@@ -49,13 +49,13 @@ class FordEnv(gym.Env):
         1	Push cart to the right
     """
 
-    def __init__(self, config, discrete=True, rendering=False):
+    def __init__(self, config, discrete=True, rendering=False, seed=33):
         # Setup gym environment
         # file name of parameters, we need to run it first
         self.rendering = rendering
         self.sample_time = config.getfloat('sample_time')
         self.episode_length = int(config.getfloat('episode_length'))
-        self.seed(33)
+        np.random.seed(seed)
         # self.fuel_ls = []
         # self.soc_ls = []
         # for compute speed tracking error
@@ -85,10 +85,6 @@ class FordEnv(gym.Env):
         except Exception as e:
             self.close()
             raise e
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
 
     def reset(self, ):
         # save reward to compute reward_norm

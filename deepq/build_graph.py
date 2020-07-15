@@ -11,15 +11,25 @@ def q_func(inpt, num_actions, scope, reuse=False):
     https://burakhimmetoglu.com/2017/08/22/time-series-classification-with-tensorflow/
     """
     with tf.variable_scope(scope, reuse=reuse):
-        out = tf.layers.conv1d(inputs=inpt, filters=12, kernel_size=2, strides=1,
-                               padding='same', activation=tf.nn.relu)
-        out = tf.layers.max_pooling1d(inputs=out, pool_size=2, strides=2, padding='same')
-        out = tf.reshape(out, (-1, 10 * 12))
-        out = tf.layers.dense(out, 64, tf.nn.relu)
-        # out = tf.layers.dense(out, num_outputs=64, activation_fn=tf.nn.tanh)
-        out = tf.layers.dropout(inputs=out, rate=0.5)
+        out1 = tf.layers.conv1d(inputs=inpt[:, :, 0:1], filters=3, kernel_size=2, strides=1,
+                                padding='same', activation=tf.nn.relu)
+        out1 = tf.reshape(out1, (-1, 20 * 3))
+
+        out2 = tf.layers.conv1d(inputs=inpt[:, :, 1:4], filters=3, kernel_size=2, strides=1,
+                                padding='same', activation=tf.nn.relu)
+        out2 = tf.reshape(out2, (-1, 20 * 3))
+
+        out3 = tf.layers.conv1d(inputs=inpt[:, :, 4:6], filters=3, kernel_size=2, strides=1,
+                                padding='same', activation=tf.nn.relu)
+        out3 = tf.reshape(out3, (-1, 20 * 3))
+
+        out4 = tf.layers.conv1d(inputs=inpt[:, :, 6:7], filters=3, kernel_size=2, strides=1,
+                                padding='same', activation=tf.nn.relu)
+        out4 = tf.reshape(out4, (-1, 20 * 3))
+        out = tf.concat([out1, out2, out3, out4], 1)
+        out = tf.layers.dense(out, 128, tf.nn.relu)
+        out = tf.layers.dense(out, 64, tf.nn.tanh)
         out = tf.layers.dense(out, num_actions)
-        # out = tf.layers.dense(out, num_outputs=num_actions, activation_fn=None)
         return out
 
 

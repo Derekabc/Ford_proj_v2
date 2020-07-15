@@ -101,7 +101,7 @@ class Matlab_Eng():
             return np.array(self.obs)
 
     def run_step(self, action):
-        u1 = -4 + action * 1
+        u1 = -4 + action * 2
         # Set the Control Action
         self.setControlAction(u1)
         self.eng.set_param(self.modelName, 'SimulationCommand',

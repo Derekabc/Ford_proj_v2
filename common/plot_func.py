@@ -25,7 +25,7 @@ def plot(logs_dir):
     plt.xlim([0, epochs])
     # plt.ylim([-2000, 8000])
     # Plot the smoothed returns
-    # episode_rewards = smooth(episode_rewards)
+    episode_rewards = smooth(episode_rewards, 49)
     plt.plot(episode_rewards, label='bs')
     plt.legend()
     plt.show()
@@ -36,7 +36,7 @@ def plot(logs_dir):
     plt.ylabel('return per epoch')
     plt.xlim([0, eval_epochs])
     # plt.ylim([-3000, 7000])
-    # eval_rewards = smooth(eval_rewards, 1)
+    eval_rewards = smooth(eval_rewards)
     plt.plot(eval_rewards, label='bs')
     plt.legend()
     plt.show()

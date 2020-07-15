@@ -14,7 +14,7 @@ def smooth(x, timestamps=9):
 
 # observation analysis
 for a in range(0):
-    logs_dir = '../Data-1/results/'
+    logs_dir = '../Data/results/'
     ob_ls = np.load(logs_dir + '{}'.format('ob_ls') + '.npy')
     ob_ls = np.squeeze(ob_ls)
     ob_mean = np.mean(ob_ls, axis=0)
@@ -22,6 +22,9 @@ for a in range(0):
     ob_max = np.max(ob_ls, axis=0)
     ob_min = np.min(ob_ls, axis=0)
     print("")
+    print("ob_mean:", ob_mean)
+    print("")
+    print("ob_std:", ob_std)
 
     obs_mean = np.array([4.83868269e+01, 9.26671424e+01, 6.41770269e+02, -3.11372911e+02,
                          6.78844516e-02, 1.27067008e-02, 1.46767778e+02])
@@ -32,11 +35,15 @@ for a in range(0):
     obs_normalized = (ob_test - obs_mean) / obs_std
 
 # reward original analysis
-for a in range(0):
-    logs_dir = '../Data-13/results/'
+for a in range(1):
+    logs_dir = '../Data/results/'
     reward = np.load(logs_dir + '{}'.format('reward_np') + '.npy')
     reward_mean = np.mean(reward, axis=0)
     reward_std = np.std(reward, axis=0)
+    print("")
+    print("reward_mean:", reward_mean)
+    print("")
+    print("reward_std:", reward_std)
 
     r_mean = -6707.54
     r_std = 7314.15
@@ -90,7 +97,7 @@ for a in range(0):
 
 
 # check the values of SOC
-for a in range(1):
+for a in range(0):
     logs_dir = '../Data-1/results/'
     SOC = np.load(logs_dir + '{}'.format('SOC') + '.npy')
     print("")

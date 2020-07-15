@@ -21,7 +21,7 @@ from Ford_env.env_ford import FordEnv
 
 
 def parse_args():
-    default_base_dir = 'Data'
+    default_base_dir = 'Data1'
     # default_config_dir = 'config/config_ford.ini'
     parser = argparse.ArgumentParser()
     parser.add_argument('--base-dir', type=str, required=False,
@@ -75,12 +75,13 @@ def train_fn(args):
     target_network_update_freq = int(config.getfloat('TRAIN_CONFIG', 'target_network_update_freq'))
     number_update = int(config.getfloat('TRAIN_CONFIG', 'num_update'))
     num_history = int(config.getfloat('TRAIN_CONFIG', 'num_history'))
+    seed = config.getint('TRAIN_CONFIG', 'seed')
 
     eps_init = config.getfloat('MODEL_CONFIG', 'epsilon_init')
     eps_decay = config.get('MODEL_CONFIG', 'epsilon_decay')
     eps_ratio = config.getfloat('MODEL_CONFIG', 'epsilon_ratio')
     eps_min = config.getfloat('MODEL_CONFIG', 'epsilon_min')
-    seed = config.getint('ENV_CONFIG', 'seed')
+    env_seed = config.getint('ENV_CONFIG', 'env_seed')
 
     if eps_decay == 'constant':
         eps_scheduler = Scheduler(eps_init, decay=eps_decay)
@@ -91,7 +92,7 @@ def train_fn(args):
     # Initialize environment
     print("Initializing environment")
     if environment is 'ford':
-        env = FordEnv(config['ENV_CONFIG'], rendering=rendering)
+        env = FordEnv(config['ENV_CONFIG'], rendering=rendering, seed=env_seed)
     else:
         env = gym.make("CartPole-v0")
 
@@ -135,6 +136,7 @@ def train_fn(args):
             np.roll(obs_buffer_new, -1, axis=0)  # shift the numpy array up, to make the most old experience last
             obs_buffer_new[-1] = new_obs
             if rendering:
+                # this function is not supported well on some environment as the plot function issues.
                 env.render()
             if reward_norm:
                 rew = rew / reward_norm
